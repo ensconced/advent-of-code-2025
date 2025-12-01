@@ -6,15 +6,20 @@
   outputs =
     { self, nixpkgs }:
     let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
+      linuxPkgs = import nixpkgs { system = "x86_64-linux"; };
+      darwinPkgs = import nixpkgs { system = "aarch64-darwin"; };
     in
     {
-      devShells.${system}.default = pkgs.mkShell {
+      devShells."x86_64-linux".default = linuxPkgs.mkShell {
         nativeBuildInputs = [
         ];
         buildInputs = [
-          pkgs.lua
+          linuxPkgs.lua5_4
+        ];
+      };
+      devShells."aarch64-darwin".default = darwinPkgs.mkShell {
+        packages = [
+          darwinPkgs.lua5_4
         ];
       };
     };
