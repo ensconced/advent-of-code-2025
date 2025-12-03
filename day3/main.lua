@@ -1,50 +1,45 @@
-local function digit_string_to_number_table(digit_string)
-  local result = {}
-  for i = 1, #digit_string do
-    table.insert(result, tonumber(digit_string:sub(i, i)))
-  end
-  return result
-end
+local function max_joltage(line, digit_count)
+  local next_available_index = 1
+  local result = ""
 
-local function biggest_following_digits(digit_table)
-  local result = {}
-  local biggest_follower = nil
-  for i = #digit_table, 2, -1 do
-    biggest_follower = math.max(biggest_follower or 0, digit_table[i])
-    result[i - 1] = biggest_follower
+  local function pick_next_digit()
+    local max_digit = nil
+    local max_digit_index = nil
+    for i = next_available_index, #line - (digit_count - #result - 1) do
+      local digit = line:sub(i, i)
+      if not max_digit or digit > max_digit then
+        max_digit = digit
+        max_digit_index = i
+      end
+    end
+    next_available_index = max_digit_index + 1
+    return max_digit
   end
-  return result
+
+  for _ = 1, digit_count do
+    result = result .. pick_next_digit()
+  end
+
+  return tonumber(result)
 end
 
 local function part1(input_path)
   local sum = 0
   for line in io.lines(input_path) do
-    local digits = digit_string_to_number_table(line)
-    local biggest_first_digit = nil
-    local biggest_first_digit_index = nil
+    sum = sum + max_joltage(line, 2)
+  end
+  return sum
+end
 
-    for i = 1, #digits - 1 do
-      if digits[i] > (biggest_first_digit or 0) then
-        biggest_first_digit = digits[i]
-        biggest_first_digit_index = i
-      end
-    end
-
-    local biggest_first_digit_indices = {}
-    for i = 1, #digits - 1 do
-      if digits[i] == biggest_first_digit then
-        table.insert(biggest_first_digit_indices, i)
-      end
-    end
-
-    local biggest_following = biggest_following_digits(digits)
-    local biggest_two_digit_num = 0
-    local two_digit_num = biggest_first_digit * 10 + biggest_following[biggest_first_digit_index]
-    biggest_two_digit_num = math.max(biggest_two_digit_num, two_digit_num)
-    sum = sum + biggest_two_digit_num
+local function part2(input_path)
+  local sum = 0
+  for line in io.lines(input_path) do
+    sum = sum + max_joltage(line, 12)
   end
   return sum
 end
 
 assert(part1("./day3/example-input.txt") == 357)
 assert(part1("./day3/input.txt") == 17179)
+assert(part2("./day3/example-input.txt") == 3121910778619)
+assert(part2("./day3/input.txt") == 170025781683941)
