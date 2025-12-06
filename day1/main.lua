@@ -27,11 +27,20 @@ local function part2(input_path)
   for line in io.lines(input_path) do
     local direction, rest = line:match("^(.)(.*)$")
     local distance = tonumber(rest)
-    local delta = direction == "R" and 1 or -1
 
-    for _ = 1, distance do
-      position = (position + delta) % 100
-      if position == 0 then
+    local whole_turns = distance // 100
+    zeroes = zeroes + whole_turns
+    distance = distance % 100
+
+    local prev_position = position
+    if direction == "R" then
+      position = (position + distance) % 100
+      if position < prev_position then
+        zeroes = zeroes + 1
+      end
+    else
+      position = (position - distance) % 100
+      if prev_position ~= 0 and (position == 0 or position > prev_position) then
         zeroes = zeroes + 1
       end
     end
