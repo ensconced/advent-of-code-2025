@@ -15,11 +15,13 @@
         ];
         buildInputs = [
           linuxPkgs.lua5_4
+          linuxPkgs.verible
         ];
       };
       devShells."aarch64-darwin".default = darwinPkgs.mkShell {
         packages = [
           darwinPkgs.lua5_4
+          darwinPkgs.verible
         ];
       };
     };

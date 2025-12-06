@@ -1,9 +1,10 @@
 require("conform").setup({
   formatters_by_ft = {
     nix = { "nixfmt" },
+    verilog = { "verible" },
+    systemverilog = { "verible" },
   },
   format_on_save = {
-    -- These options will be passed to conform.format()
     timeout_ms = 500,
     lsp_format = "fallback",
   },
@@ -40,3 +41,4 @@ vim.api.nvim_create_autocmd("BufWritePre", {
 })
 
 vim.lsp.enable("lua_ls")
+vim.lsp.enable('verible')
