@@ -21,7 +21,6 @@
       devShells."aarch64-darwin".default = darwinPkgs.mkShell {
         packages = [
           darwinPkgs.lua5_4
-          darwinPkgs.verible
         ];
       };
     };
