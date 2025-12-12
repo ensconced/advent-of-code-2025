@@ -20,6 +20,21 @@ function Rect:from_opposite_corners(corner_a, corner_b)
   return self:from_bounds(min_x, max_x, min_y, max_y)
 end
 
+function Rect:decompose_by_edges(edges)
+  -- get vertical edges, sorted by x
+  -- get horizontal edges, sorted by y
+  -- TODO...
+  error("todo")
+end
+
+function Rect:intersects_any(rects)
+  error("todo")
+end
+
+local function get_outside_rects(decomposed_world)
+  error("todo")
+end
+
 local Edge = {}
 Edge.__index = Edge
 
@@ -66,6 +81,24 @@ local function get_edges(nodes)
   return edges
 end
 
+local function get_node_bounds(nodes)
+  local min_x = math.maxinteger
+  local max_x = 0
+  local min_y = math.maxinteger
+  local max_y = 0
+
+  for _, node in pairs(nodes) do
+    min_x = math.min(min_x, node.x)
+    max_x = math.max(min_x, node.x)
+    min_y = math.min(min_y, node.y)
+    max_y = math.max(min_y, node.y)
+  end
+
+  return { min_x = min_x, max_x = max_x, min_y = min_y, max_y = max_y }
+end
+
+
+
 local function part1(input_path)
   local nodes = parse_input(input_path)
   local sorted_rects = all_sorted_rects(nodes)
@@ -75,14 +108,20 @@ end
 
 local function part2(input_path)
   local nodes = parse_input(input_path)
-  local sorted_rects = all_sorted_rects(nodes)
   local edges = get_edges(nodes)
-  -- TODO
-  -- decompose entire space into rectangles, splitting along all edges
-  -- test each rectangle to see whether it's inside or outside, making list of the outside ones
-  -- for each candidate rect, test for intersection against any of the outside rects
+  local node_bounds = get_node_bounds(nodes)
+  local world_rect = Rect:from_bounds(node_bounds.min_x, node_bounds.max_x, node_bounds.min_y, node_bounds.max_y)
+  local decomposed_world = world_rect:decompose_by_edges(edges)
+  local outside_rects = get_outside_rects(decomposed_world)
+
+  local sorted_rects = all_sorted_rects(nodes)
+  for _, rect in pairs(sorted_rects) do
+    if not rect:intersects_any(outside_rects) then
+      return rect.area
+    end
+  end
 end
 
 assert(part1("./day9/example-input.txt") == 50)
 assert(part1("./day9/input.txt") == 4781235324)
-part2("./day9/example-input.txt")
+-- part2("./day9/example-input.txt")
