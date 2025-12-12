@@ -11,8 +11,10 @@ local function part1(input_path)
   local nodes = parse_input(input_path)
 
   local max = 0
-  for _, node_a in pairs(nodes) do
-    for _, node_b in pairs(nodes) do
+  for i = 1, #nodes do
+    local node_a = nodes[i]
+    for j = i, #nodes do
+      local node_b = nodes[j]
       max = math.max(max, (math.abs(node_a.x - node_b.x) + 1) * (math.abs(node_a.y - node_b.y) + 1))
     end
   end
