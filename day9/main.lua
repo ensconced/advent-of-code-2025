@@ -39,12 +39,15 @@ function Rect:split(splitter)
 end
 
 function Rect:intersecting_horizontal_splitters(splitters)
+  error("todo")
 end
 
 function Rect:intersecting_vertical_splitters(splitters)
+  error("todo")
 end
 
 function Rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
+  error("todo")
 end
 
 function Rect:find_outside_parts(all_horizontal_splitters, all_vertical_splitters)
@@ -196,27 +199,11 @@ local function get_node_bounds(nodes)
   return { min_x = min_x, max_x = max_x, min_y = min_y, max_y = max_y }
 end
 
-local function sort_edges(edges)
-  local horizontal_edges = {}
-  local vertical_edges = {}
-  for _, edge in pairs(edges) do
-    if edge.direction == "R" or edge.direction == "L" then
-      table.insert(horizontal_edges, edge)
-    else
-      table.insert(vertical_edges, edge)
-    end
-  end
-  table.sort(horizontal_edges, function(a, b) return a.y < b.y end)
-  table.sort(vertical_edges, function(a, b) return a.x < b.x end)
-  return horizontal_edges, vertical_edges
-end
-
 local function part1(input_path)
   local nodes = parse_input(input_path)
   local sorted_rects = all_sorted_rects(nodes)
   return sorted_rects[1].area
 end
-
 
 local function part2(input_path)
   local nodes = parse_input(input_path)
