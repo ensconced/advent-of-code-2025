@@ -1,3 +1,67 @@
+local function find_middle(list)
+  return list[#list // 2 + 1]
+end
+
+local HalfOpenRange = {}
+HalfOpenRange.__index = HalfOpenRange
+
+function HalfOpenRange:new(lower, upper)
+  local range = { lower = lower, upper = upper }
+  setmetatable(range, HalfOpenRange)
+  return range
+end
+
+function HalfOpenRange:contains(x)
+  return x >= self.lower and x < self.upper
+end
+
+function HalfOpenRange:is_disjoint_to(other_range)
+  return other_range.upper <= self.lower or other_range.lower >= self.upper
+end
+
+function HalfOpenRange:intersects(other_range)
+  return not self:is_disjoint_to(other_range)
+end
+
+local RectTree = {}
+RectTree.__index = RectTree
+
+function RectTree:new(rect, horizontal_splitters, vertical_splitters)
+  local rect_tree = nil
+  print(string.format("finding best splitter for %s", rect:serialise()))
+  local splitter = rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
+  print(string.format("found: %s\n", splitter and splitter:serialise() or "nil"))
+
+  if splitter then
+    local child_a, child_b = rect:split(splitter)
+    local horizontal_splitters_for_child_a = child_a:intersecting_horizontal_splitters(horizontal_splitters)
+    local vertical_splitters_for_child_a = child_a:intersecting_vertical_splitters(vertical_splitters)
+    local horizontal_splitters_for_child_b = child_b:intersecting_horizontal_splitters(horizontal_splitters)
+    local vertical_splitters_for_child_b = child_b:intersecting_vertical_splitters(vertical_splitters)
+
+    local child_a_tree = RectTree:new(child_a, horizontal_splitters_for_child_a, vertical_splitters_for_child_a)
+    local child_b_tree = RectTree:new(child_b, horizontal_splitters_for_child_b, vertical_splitters_for_child_b)
+
+    rect_tree = { rect = rect, children = { child_a_tree, child_b_tree } }
+  else
+    -- We have found a leaf rect
+    rect_tree = { rect = rect, children = nil }
+  end
+  setmetatable(rect_tree, RectTree)
+  return rect_tree
+end
+
+function RectTree:serialise(indent)
+  local indent_level = indent or 0
+  local indentation = ("  "):rep(indent_level)
+  local result = indentation .. self.rect:serialise()
+  if self.children then
+    result = result ..
+        "\n" .. self.children[1]:serialise(indent_level + 1) .. "\n" .. self.children[2]:serialise(indent_level + 1)
+  end
+  return result
+end
+
 local Rect = {}
 Rect.__index = Rect
 
@@ -6,7 +70,7 @@ function Rect:from_bounds(min_x, max_x, min_y, max_y)
   local height = max_y - min_y + 1
   local area = width * height
 
-  local rect = { min_x = min_x, max_x = max_x, min_y = min_y, max_y = max_y, area = area }
+  local rect = { min_x = min_x, max_x = max_x, min_y = min_y, max_y = max_y, area = area, width = width, height = height }
   setmetatable(rect, self)
   return rect
 end
@@ -20,37 +84,59 @@ function Rect:from_opposite_corners(corner_a, corner_b)
   return self:from_bounds(min_x, max_x, min_y, max_y)
 end
 
+function Rect:serialise()
+  return string.format("Rect { min_x = %d, max_x = %d, min_y = %d, max_y = %d, is_outside: %q }", self.min_x, self.max_x,
+    self.min_y,
+    self.max_y, self.is_outside)
+end
+
 function Rect:split(splitter)
   if splitter.type == "vertical" then
     local left = Rect:from_bounds(self.min_x, splitter.x, self.min_y, self.max_y)
     local right = Rect:from_bounds(splitter.x + 1, self.max_x, self.min_y, self.max_y)
 
-    left.is_outside = splitter.origin_direction == "D"
+    left.is_outside = splitter.origin_direction == "U"
     right.is_outside = not left.is_outside
     return left, right
   else
     local top = Rect:from_bounds(self.min_x, self.max_x, self.min_y, splitter.y)
     local bottom = Rect:from_bounds(self.min_x, self.max_x, splitter.y + 1, self.max_y)
 
-    top.is_outside = splitter.origin_direction == "L"
+    top.is_outside = splitter.origin_direction == "R"
     bottom.is_outside = not top.is_outside
     return top, bottom
   end
 end
 
 function Rect:intersecting_horizontal_splitters(splitters)
-  error("todo")
+  local intersecting = {}
+  for _, splitter in pairs(splitters) do
+    local splitter_range_x = HalfOpenRange:new(splitter.min_x, splitter.max_x)
+    local rect_range_x = HalfOpenRange:new(self.min_x, self.max_x)
+    local rect_range_y = HalfOpenRange:new(self.min_y, self.max_y)
+    if rect_range_y:contains(splitter.y) and rect_range_x:intersects(splitter_range_x) then
+      table.insert(intersecting, splitter)
+    end
+  end
+  return intersecting
 end
 
 function Rect:intersecting_vertical_splitters(splitters)
-  error("todo")
-end
-
-local function find_middle(list)
-  error("todo")
+  local intersecting = {}
+  for _, splitter in pairs(splitters) do
+    local splitter_range_y = HalfOpenRange:new(splitter.min_y, splitter.max_y)
+    local rect_range_x = HalfOpenRange:new(self.min_x, self.max_x)
+    local rect_range_y = HalfOpenRange:new(self.min_y, self.max_y)
+    if rect_range_x:contains(splitter.x) and rect_range_y:intersects(splitter_range_y) then
+      table.insert(intersecting, splitter)
+    end
+  end
+  return intersecting
 end
 
 function Rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
+  print(string.format("picking from %d horizontal_splitters and %d vertical_splitters", #horizontal_splitters,
+    #vertical_splitters))
   local splitter = nil
   local wide = self.width > self.height
   if wide then
@@ -68,34 +154,6 @@ function Rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
   end
 
   return splitter
-end
-
-function Rect:find_outside_parts(all_horizontal_splitters, all_vertical_splitters)
-  local leaves = {}
-
-  local function split_recursively(rect, horizontal_splitters, vertical_splitters)
-    local splitter = rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
-    if splitter then
-      local part_a, part_b = rect:split(splitter)
-      split_recursively(part_a, part_a:intersecting_horizontal_splitters(horizontal_splitters),
-        part_a:intersecting_vertical_splitters(vertical_splitters))
-      split_recursively(part_b, part_b:intersecting_horizontal_splitters(horizontal_splitters),
-        part_b:intersecting_vertical_splitters(vertical_splitters))
-    else
-      table.insert(leaves, rect)
-    end
-  end
-
-  split_recursively(self, all_horizontal_splitters, all_vertical_splitters)
-
-  local outside_leaves = {}
-  for _, leaf_rect in pairs(leaves) do
-    if leaf_rect.is_outside then
-      table.insert(outside_leaves, leaf_rect)
-    end
-  end
-
-  return outside_leaves
 end
 
 local Edge = {}
@@ -116,18 +174,43 @@ function Edge:new(start_node, end_node)
   return edge
 end
 
+function Edge:serialise()
+  if self.direction == "R" or self.direction == "L" then
+    return string.format("Edge { direction = %s, y = %d, start_x = %d, end_x = %d }", self.direction, self.y,
+      self.start_x, self.end_x)
+  else
+    return string.format("Edge { direction = %s, x = %d, start_y = %d, end_y = %d }", self.direction, self.x,
+      self.start_y, self.end_y)
+  end
+end
+
 local Splitter = {}
 Splitter.__index = Splitter
 
 function Splitter:from_clockwise_edge(edge)
+  local splitter = nil
   if edge.direction == "R" then
-    return { type = "horizontal", origin_direction = "R", y = edge.y - 1, min_x = edge.start_x, max_x = edge.end_x }
+    splitter = { type = "horizontal", origin_direction = "R", y = edge.y - 1, min_x = edge.start_x, max_x = edge.end_x }
   elseif edge.direction == "L" then
-    return { type = "horizontal", origin_direction = "L", y = edge.y, min_x = edge.end_x, max_x = edge.start_x }
+    splitter = { type = "horizontal", origin_direction = "L", y = edge.y, min_x = edge.end_x, max_x = edge.start_x }
   elseif edge.direction == "U" then
-    return { type = "vertical", origin_direction = "U", x = edge.x - 1, min_y = edge.end_y, max_y = edge.start_y }
+    splitter = { type = "vertical", origin_direction = "U", x = edge.x - 1, min_y = edge.end_y, max_y = edge.start_y }
+  elseif edge.direction == "D" then
+    splitter = { type = "vertical", origin_direction = "D", x = edge.x, min_y = edge.start_y, max_y = edge.end_y }
   else
-    return { type = "vertical", origin_direction = "D", x = edge.x, min_y = edge.start_y, max_y = edge.end_y }
+    error("unexpected edge direction")
+  end
+  setmetatable(splitter, Splitter)
+  return splitter
+end
+
+function Splitter:serialise()
+  if self.type == "horizontal" then
+    return string.format("Splitter { type = horizontal, origin_direction = %s, y = %d, min_x = %d, max_x = %d }",
+      self.origin_direction, self.y, self.min_x, self.max_x)
+  else
+    return string.format("Splitter { type = vertical, origin_direction = %s, x = %d, min_y = %d, max_y = %d }",
+      self.origin_direction, self.x, self.min_y, self.max_y)
   end
 end
 
@@ -156,7 +239,7 @@ end
 local function get_clockwise_edges(nodes)
   local edges = {}
   for i, current_node in pairs(nodes) do
-    local next_node = i == #nodes and nodes[i] or nodes[i + 1]
+    local next_node = i == #nodes and nodes[1] or nodes[i + 1]
     table.insert(edges, Edge:new(current_node, next_node))
   end
 
@@ -204,7 +287,6 @@ local function get_sorted_splitters(edges)
   return horizontal_splitters, vertical_splitters
 end
 
-
 local function get_node_bounds(nodes)
   local min_x = math.maxinteger
   local max_x = 0
@@ -213,9 +295,9 @@ local function get_node_bounds(nodes)
 
   for _, node in pairs(nodes) do
     min_x = math.min(min_x, node.x)
-    max_x = math.max(min_x, node.x)
+    max_x = math.max(max_x, node.x)
     min_y = math.min(min_y, node.y)
-    max_y = math.max(min_y, node.y)
+    max_y = math.max(max_y, node.y)
   end
 
   return { min_x = min_x, max_x = max_x, min_y = min_y, max_y = max_y }
@@ -231,17 +313,24 @@ local function part2(input_path)
   local nodes = parse_input(input_path)
   local clockwise_edges = get_clockwise_edges(nodes)
   local horizontal_splitters, vertical_splitters = get_sorted_splitters(clockwise_edges)
+  -- for _, splitter in pairs(horizontal_splitters) do
+  --   print(splitter:serialise())
+  -- end
+  -- for _, splitter in pairs(vertical_splitters) do
+  --   print(splitter:serialise())
+  -- end
 
   local node_bounds = get_node_bounds(nodes)
   local world_rect = Rect:from_bounds(node_bounds.min_x, node_bounds.max_x, node_bounds.min_y, node_bounds.max_y)
-  local outside_parts = world_rect:find_outside_parts(horizontal_splitters, vertical_splitters)
-
-  local sorted_rects = all_sorted_rects(nodes)
-  for _, rect in pairs(sorted_rects) do
-    if not rect:intersects_any(outside_parts) then
-      return rect.area
-    end
-  end
+  print("world_rect:", world_rect:serialise())
+  local rect_tree = RectTree:new(world_rect, horizontal_splitters, vertical_splitters)
+  print(rect_tree:serialise())
+  -- local sorted_rects = all_sorted_rects(nodes)
+  -- for _, rect in pairs(sorted_rects) do
+  --   if not rect:intersects_any_outside_rect(rect_tree) then
+  --     return rect.area
+  --   end
+  -- end
 end
 
 assert(part1("./day9/example-input.txt") == 50)

@@ -1,0 +1,67 @@
+   01234567890123
+0  ..............
+1  .......#XXX#..
+2  .......X...X..
+3  ..#XXXX#...X..
+4  ..X........X..
+5  ..#XXXXXX#.X..
+6  .........X.X..
+7  .........#X#..
+8  ..............
+
+world_rect:	Rect { min_x = 2, max_x = 11, min_y = 1, max_y = 7 }
+finding best splitter for Rect { min_x = 2, max_x = 11, min_y = 1, max_y = 7 }
+
+   234567890123
+1  .....#XXX#..
+2  .....X...X..
+3  #XXXX#...X..
+4  X........X..
+5  #XXXXXX#.X..
+6  .......X.X..
+7  .......#X#..
+
+
+picking from 4 horizontal_splitters and 4 vertical_splitters
+found: Splitter { type = vertical, origin_direction = U, x = 8, min_y = 5, max_y = 7 }
+
+   2345678   90123
+1  .....#X | XX#..
+2  .....X. | ..X..
+3  #XXXX#. | ..X..
+4  X...... | ..X..
+5  #XXXXXX | #.X..
+6  ....... | X.X..
+7  ....... | #X#..
+
+finding best splitter for Rect { min_x = 2, max_x = 8, min_y = 1, max_y = 7 }
+picking from 2 horizontal_splitters and 1 vertical_splitters
+found: Splitter { type = horizontal, origin_direction = L, y = 5, min_x = 2, max_x = 9 }
+
+   2345678     90123
+1  .....#X | 1 XX#..
+2  .....X. | 2 ..X..
+3  #XXXX#. | 3 ..X..
+4  X...... | 4 ..X..
+5  #XXXXXX | 5 #.X..
+   ------- | 6 X.X..
+6  ....... | 7 #X#..
+7  ....... | 
+
+finding best splitter for Rect { min_x = 2, max_x = 8, min_y = 1, max_y = 5 }
+picking from 1 horizontal_splitters and 1 vertical_splitters
+found: Splitter { type = vertical, origin_direction = D, x = 7, min_y = 3, max_y = 3 }
+
+
+   2345678             90123
+1  .....#X     |     1 XX#..
+2  .....X.     |     2 ..X..
+3  #XXXX#.     |     3 ..X..
+4  X......     |     4 ..X..
+5  #XXXXXX     |     5 #.X..
+               |     6 X.X.. 
+   ------------|     7 #X#..        
+               |     
+6  .......     |     
+7  .......     |     
+
