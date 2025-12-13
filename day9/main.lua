@@ -38,33 +38,41 @@ function Rect:split(splitter)
   end
 end
 
-function Rect:intersecting_splitters(splitters)
+function Rect:intersecting_horizontal_splitters(splitters)
 end
 
-function Rect:decompose(horizontal_splitters, vertical_splitters)
+function Rect:intersecting_vertical_splitters(splitters)
+end
+
+function Rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
+end
+
+function Rect:find_outside_parts(all_horizontal_splitters, all_vertical_splitters)
   local leaves = {}
 
-  local function find_splitter(rect)
-    error("todo")
-  end
-
-  local function single_split(rect, edge)
-    error("todo")
-  end
-
-  local function split_recursively(rect)
-    local splitter = find_splitter(rect)
+  local function split_recursively(rect, horizontal_splitters, vertical_splitters)
+    local splitter = rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
     if splitter then
-      local part_a, part_b = single_split(rect, splitter)
-      split_recursively(part_a)
-      split_recursively(part_b)
+      local part_a, part_b = rect:split(splitter)
+      split_recursively(part_a, part_a:intersecting_horizontal_splitters(horizontal_splitters),
+        part_a:intersecting_vertical_splitters(vertical_splitters))
+      split_recursively(part_b, part_b:intersecting_horizontal_splitters(horizontal_splitters),
+        part_b:intersecting_vertical_splitters(vertical_splitters))
     else
       table.insert(leaves, rect)
     end
   end
 
-  split_recursively(self)
-  return leaves
+  split_recursively(self, all_horizontal_splitters, all_vertical_splitters)
+
+  local outside_leaves = {}
+  for _, leaf_rect in pairs(leaves) do
+    if leaf_rect.is_outside then
+      table.insert(outside_leaves, leaf_rect)
+    end
+  end
+
+  return outside_leaves
 end
 
 local Edge = {}
@@ -218,19 +226,11 @@ local function part2(input_path)
 
   local node_bounds = get_node_bounds(nodes)
   local world_rect = Rect:from_bounds(node_bounds.min_x, node_bounds.max_x, node_bounds.min_y, node_bounds.max_y)
-  world_rect.is_outside = true
-
-  local decomposed_tree = world_rect:decompose(horizontal_splitters, vertical_splitters)
-  local outside_leaves = {}
-  for leaf_rect in pairs(decomposed_tree:leaves()) do
-    if leaf_rect.is_outside then
-      table.insert(outside_leaves, leaf_rect)
-    end
-  end
+  local outside_parts = world_rect:find_outside_parts(horizontal_splitters, vertical_splitters)
 
   local sorted_rects = all_sorted_rects(nodes)
   for _, rect in pairs(sorted_rects) do
-    if not rect:intersects_any(outside_leaves) then
+    if not rect:intersects_any(outside_parts) then
       return rect.area
     end
   end
