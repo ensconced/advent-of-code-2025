@@ -28,9 +28,7 @@ RectTree.__index = RectTree
 
 function RectTree:new(rect, horizontal_splitters, vertical_splitters)
   local rect_tree = nil
-  print(string.format("finding best splitter for %s", rect:serialise()))
   local splitter = rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
-  print(string.format("found: %s\n", splitter and splitter:serialise() or "nil"))
 
   if splitter then
     local child_a, child_b = rect:split(splitter)
@@ -135,8 +133,6 @@ function Rect:intersecting_vertical_splitters(splitters)
 end
 
 function Rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
-  print(string.format("picking from %d horizontal_splitters and %d vertical_splitters", #horizontal_splitters,
-    #vertical_splitters))
   local splitter = nil
   local wide = self.width > self.height
   if wide then
@@ -154,6 +150,24 @@ function Rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
   end
 
   return splitter
+end
+
+function Rect:intersects(other_rect)
+  local disjoint_x = other_rect.min_x > self.max_x or other_rect.max_x < self.min_x
+  local disjoint_y = other_rect.min_y > self.max_y or other_rect.max_y < self.min_y
+  return not (disjoint_x) and not (disjoint_y)
+end
+
+function Rect:intersects_any_outside_rect(rect_tree)
+  if self:intersects(rect_tree.rect) then
+    if rect_tree.children == nil then
+      return rect_tree.rect.is_outside
+    else
+      return self:intersects_any_outside_rect(rect_tree.children[1]) or
+          self:intersects_any_outside_rect(rect_tree.children[2])
+    end
+  end
+  return false
 end
 
 local Edge = {}
@@ -313,26 +327,18 @@ local function part2(input_path)
   local nodes = parse_input(input_path)
   local clockwise_edges = get_clockwise_edges(nodes)
   local horizontal_splitters, vertical_splitters = get_sorted_splitters(clockwise_edges)
-  -- for _, splitter in pairs(horizontal_splitters) do
-  --   print(splitter:serialise())
-  -- end
-  -- for _, splitter in pairs(vertical_splitters) do
-  --   print(splitter:serialise())
-  -- end
-
   local node_bounds = get_node_bounds(nodes)
   local world_rect = Rect:from_bounds(node_bounds.min_x, node_bounds.max_x, node_bounds.min_y, node_bounds.max_y)
-  print("world_rect:", world_rect:serialise())
   local rect_tree = RectTree:new(world_rect, horizontal_splitters, vertical_splitters)
-  print(rect_tree:serialise())
-  -- local sorted_rects = all_sorted_rects(nodes)
-  -- for _, rect in pairs(sorted_rects) do
-  --   if not rect:intersects_any_outside_rect(rect_tree) then
-  --     return rect.area
-  --   end
-  -- end
+  local sorted_rects = all_sorted_rects(nodes)
+  for _, rect in pairs(sorted_rects) do
+    if not rect:intersects_any_outside_rect(rect_tree) then
+      return rect.area
+    end
+  end
 end
 
 assert(part1("./day9/example-input.txt") == 50)
 assert(part1("./day9/input.txt") == 4781235324)
-part2("./day9/example-input.txt")
+assert(part2("./day9/example-input.txt") == 24)
+assert(part2("./day9/input.txt") == 1566935900)
