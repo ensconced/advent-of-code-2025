@@ -46,8 +46,28 @@ function Rect:intersecting_vertical_splitters(splitters)
   error("todo")
 end
 
-function Rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
+local function find_middle(list)
   error("todo")
+end
+
+function Rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
+  local splitter = nil
+  local wide = self.width > self.height
+  if wide then
+    splitter = find_middle(vertical_splitters)
+  else
+    splitter = find_middle(horizontal_splitters)
+  end
+
+  if not splitter then
+    if wide then
+      splitter = find_middle(horizontal_splitters)
+    else
+      splitter = find_middle(vertical_splitters)
+    end
+  end
+
+  return splitter
 end
 
 function Rect:find_outside_parts(all_horizontal_splitters, all_vertical_splitters)
@@ -166,7 +186,7 @@ local function get_clockwise_edges(nodes)
   return reversed_edges
 end
 
-local function get_splitters(edges)
+local function get_sorted_splitters(edges)
   local horizontal_splitters = {}
   local vertical_splitters = {}
 
@@ -179,6 +199,8 @@ local function get_splitters(edges)
     end
   end
 
+  table.sort(horizontal_splitters, function(a, b) return a.y < b.y end)
+  table.sort(vertical_splitters, function(a, b) return a.x < b.x end)
   return horizontal_splitters, vertical_splitters
 end
 
@@ -208,8 +230,7 @@ end
 local function part2(input_path)
   local nodes = parse_input(input_path)
   local clockwise_edges = get_clockwise_edges(nodes)
-  local horizontal_splitters, vertical_splitters = get_splitters(clockwise_edges)
-
+  local horizontal_splitters, vertical_splitters = get_sorted_splitters(clockwise_edges)
 
   local node_bounds = get_node_bounds(nodes)
   local world_rect = Rect:from_bounds(node_bounds.min_x, node_bounds.max_x, node_bounds.min_y, node_bounds.max_y)
