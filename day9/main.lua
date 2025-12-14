@@ -15,12 +15,8 @@ function HalfOpenRange:contains(x)
   return x >= self.lower and x < self.upper
 end
 
-function HalfOpenRange:is_disjoint_to(other_range)
-  return other_range.upper <= self.lower or other_range.lower >= self.upper
-end
-
 function HalfOpenRange:intersects(other_range)
-  return not self:is_disjoint_to(other_range)
+  return other_range.upper > self.lower and other_range.lower < self.upper
 end
 
 local RectTree = {}
@@ -49,17 +45,6 @@ function RectTree:new(rect, horizontal_splitters, vertical_splitters)
   return rect_tree
 end
 
-function RectTree:serialise(indent)
-  local indent_level = indent or 0
-  local indentation = ("  "):rep(indent_level)
-  local result = indentation .. self.rect:serialise()
-  if self.children then
-    result = result ..
-        "\n" .. self.children[1]:serialise(indent_level + 1) .. "\n" .. self.children[2]:serialise(indent_level + 1)
-  end
-  return result
-end
-
 local Rect = {}
 Rect.__index = Rect
 
@@ -80,12 +65,6 @@ function Rect:from_opposite_corners(corner_a, corner_b)
   local max_y = math.max(corner_a.y, corner_b.y)
 
   return self:from_bounds(min_x, max_x, min_y, max_y)
-end
-
-function Rect:serialise()
-  return string.format("Rect { min_x = %d, max_x = %d, min_y = %d, max_y = %d, is_outside: %q }", self.min_x, self.max_x,
-    self.min_y,
-    self.max_y, self.is_outside)
 end
 
 function Rect:split(splitter)
@@ -162,40 +141,11 @@ function Rect:intersects_any_outside_rect(rect_tree)
   if self:intersects(rect_tree.rect) then
     if rect_tree.children == nil then
       return rect_tree.rect.is_outside
-    else
-      return self:intersects_any_outside_rect(rect_tree.children[1]) or
-          self:intersects_any_outside_rect(rect_tree.children[2])
     end
+    return self:intersects_any_outside_rect(rect_tree.children[1]) or
+        self:intersects_any_outside_rect(rect_tree.children[2])
   end
   return false
-end
-
-local Edge = {}
-Edge.__index = Edge
-
-function Edge:new(start_node, end_node)
-  local edge = nil
-  if end_node.x > start_node.x then
-    edge = { direction = "R", y = start_node.y, start_x = start_node.x, end_x = end_node.x }
-  elseif start_node.x > end_node.x then
-    edge = { direction = "L", y = start_node.y, start_x = start_node.x, end_x = end_node.x }
-  elseif start_node.y > end_node.y then
-    edge = { direction = "U", x = start_node.x, start_y = start_node.y, end_y = end_node.y }
-  else
-    edge = { direction = "D", x = start_node.x, start_y = start_node.y, end_y = end_node.y }
-  end
-  setmetatable(edge, Edge)
-  return edge
-end
-
-function Edge:serialise()
-  if self.direction == "R" or self.direction == "L" then
-    return string.format("Edge { direction = %s, y = %d, start_x = %d, end_x = %d }", self.direction, self.y,
-      self.start_x, self.end_x)
-  else
-    return string.format("Edge { direction = %s, x = %d, start_y = %d, end_y = %d }", self.direction, self.x,
-      self.start_y, self.end_y)
-  end
 end
 
 local Splitter = {}
@@ -216,16 +166,6 @@ function Splitter:from_clockwise_edge(edge)
   end
   setmetatable(splitter, Splitter)
   return splitter
-end
-
-function Splitter:serialise()
-  if self.type == "horizontal" then
-    return string.format("Splitter { type = horizontal, origin_direction = %s, y = %d, min_x = %d, max_x = %d }",
-      self.origin_direction, self.y, self.min_x, self.max_x)
-  else
-    return string.format("Splitter { type = vertical, origin_direction = %s, x = %d, min_y = %d, max_y = %d }",
-      self.origin_direction, self.x, self.min_y, self.max_y)
-  end
 end
 
 local function parse_input(input_path)
@@ -250,11 +190,21 @@ local function all_sorted_rects(nodes)
   return rects
 end
 
-local function get_clockwise_edges(nodes)
+local function get_clockwise_cycle(nodes)
   local edges = {}
   for i, current_node in pairs(nodes) do
     local next_node = i == #nodes and nodes[1] or nodes[i + 1]
-    table.insert(edges, Edge:new(current_node, next_node))
+    local edge = nil
+    if next_node.x > current_node.x then
+      edge = { direction = "R", y = current_node.y, start_x = current_node.x, end_x = next_node.x }
+    elseif current_node.x > next_node.x then
+      edge = { direction = "L", y = current_node.y, start_x = current_node.x, end_x = next_node.x }
+    elseif current_node.y > next_node.y then
+      edge = { direction = "U", x = current_node.x, start_y = current_node.y, end_y = next_node.y }
+    else
+      edge = { direction = "D", x = current_node.x, start_y = current_node.y, end_y = next_node.y }
+    end
+    table.insert(edges, edge)
   end
 
   local cwCount = 0
@@ -275,15 +225,12 @@ local function get_clockwise_edges(nodes)
 
   if cwCount > 0 then
     return edges
+  else
+    error("expected cycle to be clockwise - need to reverse them all")
   end
-  local reversed_edges = {}
-  for i = #edges, 1, -1 do
-    table.insert(reversed_edges, edges[i])
-  end
-  return reversed_edges
 end
 
-local function get_sorted_splitters(edges)
+local function get_splitters(edges)
   local horizontal_splitters = {}
   local vertical_splitters = {}
 
@@ -296,8 +243,6 @@ local function get_sorted_splitters(edges)
     end
   end
 
-  table.sort(horizontal_splitters, function(a, b) return a.y < b.y end)
-  table.sort(vertical_splitters, function(a, b) return a.x < b.x end)
   return horizontal_splitters, vertical_splitters
 end
 
@@ -325,8 +270,8 @@ end
 
 local function part2(input_path)
   local nodes = parse_input(input_path)
-  local clockwise_edges = get_clockwise_edges(nodes)
-  local horizontal_splitters, vertical_splitters = get_sorted_splitters(clockwise_edges)
+  local clockwise_edges = get_clockwise_cycle(nodes)
+  local horizontal_splitters, vertical_splitters = get_splitters(clockwise_edges)
   local node_bounds = get_node_bounds(nodes)
   local world_rect = Rect:from_bounds(node_bounds.min_x, node_bounds.max_x, node_bounds.min_y, node_bounds.max_y)
   local rect_tree = RectTree:new(world_rect, horizontal_splitters, vertical_splitters)
