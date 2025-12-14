@@ -2,21 +2,21 @@ local function find_middle(list)
   return list[#list // 2 + 1]
 end
 
-local HalfOpenRange = {}
-HalfOpenRange.__index = HalfOpenRange
+local InclusiveRange = {}
+InclusiveRange.__index = InclusiveRange
 
-function HalfOpenRange:new(lower, upper)
+function InclusiveRange:new(lower, upper)
   local range = { lower = lower, upper = upper }
-  setmetatable(range, HalfOpenRange)
+  setmetatable(range, InclusiveRange)
   return range
 end
 
-function HalfOpenRange:contains(x)
-  return x >= self.lower and x < self.upper
+function InclusiveRange:contains(x)
+  return x >= self.lower and x <= self.upper
 end
 
-function HalfOpenRange:intersects(other_range)
-  return other_range.upper > self.lower and other_range.lower < self.upper
+function InclusiveRange:intersects(other_range)
+  return other_range.upper >= self.lower and other_range.lower <= self.upper
 end
 
 local RectTree = {}
@@ -53,7 +53,13 @@ function Rect:from_bounds(min_x, max_x, min_y, max_y)
   local height = max_y - min_y + 1
   local area = width * height
 
-  local rect = { min_x = min_x, max_x = max_x, min_y = min_y, max_y = max_y, area = area, width = width, height = height }
+  local rect = {
+    area = area,
+    width = width,
+    height = height,
+    x = InclusiveRange:new(min_x, max_x),
+    y = InclusiveRange:new(min_y, max_y)
+  }
   setmetatable(rect, self)
   return rect
 end
@@ -69,15 +75,15 @@ end
 
 function Rect:split(splitter)
   if splitter.dir == "U" or splitter.dir == "D" then
-    local left = Rect:from_bounds(self.min_x, splitter.x, self.min_y, self.max_y)
-    local right = Rect:from_bounds(splitter.x + 1, self.max_x, self.min_y, self.max_y)
+    local left = Rect:from_bounds(self.x.lower, splitter.x, self.y.lower, self.y.upper)
+    local right = Rect:from_bounds(splitter.x + 1, self.x.upper, self.y.lower, self.y.upper)
 
     left.is_outside = splitter.dir == "U"
     right.is_outside = not left.is_outside
     return left, right
   else
-    local top = Rect:from_bounds(self.min_x, self.max_x, self.min_y, splitter.y)
-    local bottom = Rect:from_bounds(self.min_x, self.max_x, splitter.y + 1, self.max_y)
+    local top = Rect:from_bounds(self.x.lower, self.x.upper, self.y.lower, splitter.y)
+    local bottom = Rect:from_bounds(self.x.lower, self.x.upper, splitter.y + 1, self.y.upper)
 
     top.is_outside = splitter.dir == "R"
     bottom.is_outside = not top.is_outside
@@ -88,10 +94,9 @@ end
 function Rect:intersecting_horizontal_splitters(splitters)
   local intersecting = {}
   for _, splitter in pairs(splitters) do
-    local splitter_range_x = HalfOpenRange:new(splitter.min_x, splitter.max_x)
-    local rect_range_x = HalfOpenRange:new(self.min_x, self.max_x)
-    local rect_range_y = HalfOpenRange:new(self.min_y, self.max_y)
-    if rect_range_y:contains(splitter.y) and rect_range_x:intersects(splitter_range_x) then
+    local rect_range_x = InclusiveRange:new(self.x.lower, self.x.upper - 1)
+    local rect_range_y = InclusiveRange:new(self.y.lower, self.y.upper - 1)
+    if rect_range_y:contains(splitter.y) and rect_range_x:intersects(splitter.x) then
       table.insert(intersecting, splitter)
     end
   end
@@ -101,10 +106,9 @@ end
 function Rect:intersecting_vertical_splitters(splitters)
   local intersecting = {}
   for _, splitter in pairs(splitters) do
-    local splitter_range_y = HalfOpenRange:new(splitter.min_y, splitter.max_y)
-    local rect_range_x = HalfOpenRange:new(self.min_x, self.max_x)
-    local rect_range_y = HalfOpenRange:new(self.min_y, self.max_y)
-    if rect_range_x:contains(splitter.x) and rect_range_y:intersects(splitter_range_y) then
+    local rect_range_x = InclusiveRange:new(self.x.lower, self.x.upper - 1)
+    local rect_range_y = InclusiveRange:new(self.y.lower, self.y.upper - 1)
+    if rect_range_x:contains(splitter.x) and rect_range_y:intersects(splitter.y) then
       table.insert(intersecting, splitter)
     end
   end
@@ -112,29 +116,13 @@ function Rect:intersecting_vertical_splitters(splitters)
 end
 
 function Rect:pick_best_splitter(horizontal_splitters, vertical_splitters)
-  local splitter = nil
   local wide = self.width > self.height
-  if wide then
-    splitter = find_middle(vertical_splitters)
-  else
-    splitter = find_middle(horizontal_splitters)
-  end
-
-  if not splitter then
-    if wide then
-      splitter = find_middle(horizontal_splitters)
-    else
-      splitter = find_middle(vertical_splitters)
-    end
-  end
-
-  return splitter
+  return find_middle(wide and vertical_splitters or horizontal_splitters) or
+      find_middle(wide and horizontal_splitters or vertical_splitters)
 end
 
 function Rect:intersects(other_rect)
-  local disjoint_x = other_rect.min_x > self.max_x or other_rect.max_x < self.min_x
-  local disjoint_y = other_rect.min_y > self.max_y or other_rect.max_y < self.min_y
-  return not (disjoint_x) and not (disjoint_y)
+  return self.x:intersects(other_rect.x) and self.y:intersects(other_rect.y)
 end
 
 function Rect:intersects_any_outside_rect(rect_tree)
@@ -177,21 +165,13 @@ local function get_splitters(nodes)
   for i, current in pairs(nodes) do
     local next = i == #nodes and nodes[1] or nodes[i + 1]
     if next.x > current.x then
-      table.insert(horizontal_splitters, {
-        dir = "R", y = current.y - 1, min_x = current.x, max_x = next.x
-      })
+      table.insert(horizontal_splitters, { dir = "R", y = current.y - 1, x = InclusiveRange:new(current.x, next.x - 1) })
     elseif current.x > next.x then
-      table.insert(horizontal_splitters, {
-        dir = "L", y = current.y, min_x = next.x, max_x = current.x
-      })
+      table.insert(horizontal_splitters, { dir = "L", y = current.y, x = InclusiveRange:new(next.x, current.x - 1) })
     elseif current.y > next.y then
-      table.insert(vertical_splitters, {
-        dir = "U", x = current.x - 1, min_y = next.y, max_y = current.y
-      })
+      table.insert(vertical_splitters, { dir = "U", x = current.x - 1, y = InclusiveRange:new(next.y, current.y - 1) })
     else
-      table.insert(vertical_splitters, {
-        dir = "D", x = current.x, min_y = current.y, max_y = next.y
-      })
+      table.insert(vertical_splitters, { dir = "D", x = current.x, y = InclusiveRange:new(current.y, next.y - 1) })
     end
   end
   table.sort(horizontal_splitters, function(a, b) return a.y < b.y end)
