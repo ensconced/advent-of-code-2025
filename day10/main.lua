@@ -110,6 +110,14 @@ local function copy_list(list)
   return copy
 end
 
+local function take(list, n)
+  local chunk = {}
+  for _ = 1, math.min(#list, n) do
+    table.insert(chunk, table.remove(list, 1))
+  end
+  return chunk
+end
+
 local function min_presses_to_joltage(machine)
   local function find_max_joltage_per_press()
     local max = 0
@@ -121,18 +129,28 @@ local function min_presses_to_joltage(machine)
   local max_joltage_per_press = find_max_joltage_per_press()
 
   local function branch_lower_bound(remaining_joltages, current_press_count)
-    local total_remaining = 0
-    local max_remaining = 0
-    for _, remaining_joltage in pairs(remaining_joltages) do
-      total_remaining = total_remaining + remaining_joltage
-      max_remaining = math.max(max_remaining, remaining_joltage)
+    -- TODO - what we *should* be doing here is taking the approach as if we didn't
+    -- care about exceeding the joltage. Here, for each joltage, you would simply
+    -- choose the BIGGEST button that included that joltage, and press that as many
+    -- times as necessary to get that joltage to zero, decreasing the other joltages
+    -- affected by that button as a happy side effect.
+    local copy = copy_list(remaining_joltages)
+    table.sort(copy, function(a, b) return a > b end)
+    print(serialise_num_list(copy))
+    local lower_bound = 0
+    while #copy > 0 do
+      local chunk = take(copy, max_joltage_per_press)
+      if #chunk > 0 then
+        lower_bound = lower_bound + chunk[1]
+      end
     end
-    return math.max(math.ceil(total_remaining / max_joltage_per_press), max_remaining) + current_press_count
+    print(max_joltage_per_press, lower_bound)
+    return lower_bound + current_press_count
   end
 
   local function check_joltage_status(remaining_joltages)
     local done = true
-    for i, joltage in pairs(remaining_joltages) do
+    for _, joltage in pairs(remaining_joltages) do
       if joltage < 0 then
         return false, true
       elseif joltage > 0 then
@@ -154,15 +172,16 @@ local function min_presses_to_joltage(machine)
       return math.min(current_press_count, min_presses_to_target)
     end
 
+    if exceeded_target_joltages then
+      -- print(string.format("%sexceeded joltage targets", indent))
+      return min_presses_to_target
+    end
+
     if branch_lower_bound(remaining_joltages, current_press_count) >= min_presses_to_target then
       -- print(string.format("%spruning by lower bound", indent))
       return min_presses_to_target
     end
 
-    if exceeded_target_joltages then
-      -- print(string.format("%sexceeded joltage targets", indent))
-      return min_presses_to_target
-    end
 
     for _, button in pairs(machine.buttons) do
       local next_press_count = current_press_count + 1
