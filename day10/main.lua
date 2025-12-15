@@ -119,14 +119,15 @@ local function take(list, n)
 end
 
 local function min_presses_to_joltage(machine)
-  local function find_max_joltage_per_press()
-    local max = 0
-    for _, button in pairs(machine.buttons) do
-      max = math.max(#button.list, max)
+  local function find_biggest_button_per_joltage()
+    local result = {}
+    for _, joltage in pairs(machine.joltages) do
+      local biggest_button = nil
+      error("todo")
     end
-    return max
+    return result
   end
-  local max_joltage_per_press = find_max_joltage_per_press()
+  local biggest_button_per_joltage = find_biggest_button_per_joltage()
 
   local function branch_lower_bound(remaining_joltages, current_press_count)
     -- TODO - what we *should* be doing here is taking the approach as if we didn't
@@ -139,12 +140,12 @@ local function min_presses_to_joltage(machine)
     print(serialise_num_list(copy))
     local lower_bound = 0
     while #copy > 0 do
-      local chunk = take(copy, max_joltage_per_press)
+      local chunk = take(copy, biggest_button_per_joltage)
       if #chunk > 0 then
         lower_bound = lower_bound + chunk[1]
       end
     end
-    print(max_joltage_per_press, lower_bound)
+    print(biggest_button_per_joltage, lower_bound)
     return lower_bound + current_press_count
   end
 
