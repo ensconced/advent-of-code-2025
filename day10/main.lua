@@ -111,67 +111,74 @@ local function copy_list(list)
 end
 
 local function min_presses_to_joltage(machine)
-  local function branch_lower_bound(current_joltages, current_press_count)
-    local remaining_presses_lower_bound = 0
-    for i, target_joltage in pairs(machine.joltages) do
-      remaining_presses_lower_bound = remaining_presses_lower_bound + target_joltage - current_joltages[i]
+  local function find_max_joltage_per_press()
+    local max = 0
+    for _, button in pairs(machine.buttons) do
+      max = math.max(#button.list, max)
     end
-    return remaining_presses_lower_bound + current_press_count
+    return max
+  end
+  local max_joltage_per_press = find_max_joltage_per_press()
+
+  local function branch_lower_bound(remaining_joltages, current_press_count)
+    local total_remaining = 0
+    local max_remaining = 0
+    for _, remaining_joltage in pairs(remaining_joltages) do
+      total_remaining = total_remaining + remaining_joltage
+      max_remaining = math.max(max_remaining, remaining_joltage)
+    end
+    return math.max(math.ceil(total_remaining / max_joltage_per_press), max_remaining) + current_press_count
   end
 
-  local function check_joltage_status(current_joltages)
+  local function check_joltage_status(remaining_joltages)
     local done = true
-    for i, joltage in pairs(current_joltages) do
-      if joltage > machine.joltages[i] then
+    for i, joltage in pairs(remaining_joltages) do
+      if joltage < 0 then
         return false, true
-      elseif joltage ~= machine.joltages[i] then
+      elseif joltage > 0 then
         done = false
       end
     end
     return done, false
   end
 
-  local function find_min_for_branch(current_press_count, current_joltages, min_press_count)
+  local function find_min_for_branch(current_press_count, remaining_joltages, min_presses_to_target)
     local indent = ("  "):rep(current_press_count)
-    print(string.format("%scurrent_press_count: %d", indent, current_press_count))
-    print(string.format("%smin_press_count: %d", indent, min_press_count))
-    print(string.format("%scurrent_joltages: %s", indent, serialise_num_list(current_joltages)))
-    local reached_target_joltages, exceeded_target_joltages = check_joltage_status(current_joltages)
+    -- print(string.format("%scurrent_press_count: %d", indent, current_press_count))
+    -- print(string.format("%smin_presses_to_target: %d", indent, min_presses_to_target))
+    -- print(string.format("%sremaining_joltages: %s", indent, serialise_num_list(remaining_joltages)))
+    local reached_target_joltages, exceeded_target_joltages = check_joltage_status(remaining_joltages)
 
     if reached_target_joltages then
-      print(string.format("%sreached target", indent))
-      return math.min(current_press_count, min_press_count)
+      -- print(string.format("%sreached target", indent))
+      return math.min(current_press_count, min_presses_to_target)
     end
 
-    if branch_lower_bound(current_joltages, current_press_count) >= min_press_count then
-      print(string.format("%spruning by lower bound", indent))
-      return min_press_count
+    if branch_lower_bound(remaining_joltages, current_press_count) >= min_presses_to_target then
+      -- print(string.format("%spruning by lower bound", indent))
+      return min_presses_to_target
     end
 
     if exceeded_target_joltages then
-      print(string.format("%sexceeded joltage targets", indent))
-      return min_press_count
+      -- print(string.format("%sexceeded joltage targets", indent))
+      return min_presses_to_target
     end
 
     for _, button in pairs(machine.buttons) do
       local next_press_count = current_press_count + 1
-      local next_joltages = copy_list(current_joltages)
+      local next_joltages = copy_list(remaining_joltages)
       for _, joltage_idx in pairs(button.list) do
-        next_joltages[joltage_idx + 1] = next_joltages[joltage_idx + 1] + 1
+        next_joltages[joltage_idx + 1] = next_joltages[joltage_idx + 1] - 1
       end
-      print(string.format("%snext_joltages: %s", indent, serialise_num_list(next_joltages)))
-      min_press_count = math.min(min_press_count, find_min_for_branch(next_press_count, next_joltages, min_press_count))
+      -- print(string.format("%snext_joltages: %s", indent, serialise_num_list(next_joltages)))
+      min_presses_to_target = math.min(min_presses_to_target,
+        find_min_for_branch(next_press_count, next_joltages, min_presses_to_target))
     end
 
-    return min_press_count
+    return min_presses_to_target
   end
 
-  local initial_joltages = {}
-  for _ = 1, #machine.joltages do
-    table.insert(initial_joltages, 0)
-  end
-
-  return find_min_for_branch(0, initial_joltages, math.maxinteger)
+  return find_min_for_branch(0, machine.joltages, math.maxinteger)
 end
 
 local function part2(input_path)
@@ -179,7 +186,7 @@ local function part2(input_path)
   local total = 0
   for _, machine in pairs(machines) do
     local min_presses = min_presses_to_joltage(machine)
-    print(min_presses)
+    -- print(min_presses)
     total = total + min_presses
   end
   return total
@@ -188,3 +195,4 @@ end
 assert(part1("./day10/example-input.txt") == 7)
 assert(part1("./day10/input.txt") == 547)
 print(part2("./day10/example-input.txt"))
+print(part2("./day10/input.txt"))
